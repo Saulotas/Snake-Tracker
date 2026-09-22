@@ -21,25 +21,26 @@ class ReminderSchedulerTest {
     }
 
     @Test
-    fun android12Plus_fallsBackToInexact_whenThePermissionIsDenied() {
+    fun android12Plus_fallsBackToTheBoundedWindow_whenThePermissionIsDenied() {
         assertFalse(shouldUseExactApi(sdkInt = 31, exactPermissionHeld = false))
         assertFalse(shouldUseExactApi(sdkInt = 34, exactPermissionHeld = false))
     }
 
     @Test
-    fun armViaLadder_degradesToTheInexactApi_whenTheExactSetThrowsSecurityException() {
+    fun armViaLadder_degradesToTheBoundedWindow_whenTheExactSetThrowsSecurityException() {
         val calls = mutableListOf<String>()
 
         armViaPermissionLadder(
             sdkInt = 34,
             exactPermissionHeld = true,
             setExact = { calls.add("exact"); throw SecurityException("permission revoked mid-flight") },
-            setInexact = { calls.add("inexact") }
+            setInexact = { calls.add("window") }
         )
 
-        // The revocation race must degrade to the inexact fallback, not crash:
-        // the reminder still lands, ~15 min of tolerance on the correct day.
-        assertEquals(listOf("exact", "inexact"), calls)
+        // The revocation race must degrade to the bounded-window fallback, not
+        // crash: the reminder still lands inside the stated 10-minute window
+        // on the correct day (issue #36 WB3).
+        assertEquals(listOf("exact", "window"), calls)
     }
 
     @Test
@@ -50,7 +51,7 @@ class ReminderSchedulerTest {
             sdkInt = 34,
             exactPermissionHeld = true,
             setExact = { calls.add("exact") },
-            setInexact = { calls.add("inexact") }
+            setInexact = { calls.add("window") }
         )
 
         assertEquals(listOf("exact"), calls)
@@ -64,9 +65,17 @@ class ReminderSchedulerTest {
             sdkInt = 31,
             exactPermissionHeld = false,
             setExact = { calls.add("exact") },
-            setInexact = { calls.add("inexact") }
+            setInexact = { calls.add("window") }
         )
 
-        assertEquals(listOf("inexact"), calls)
+        // Without the grant the same due instant is armed as the bounded
+        // window call, never the exact one (issue #36 WB2).
+        assertEquals(listOf("window"), calls)
+    }
+
+    @Test
+    fun fallbackWindow_isTenMinutes() {
+        // 10 minutes in millis — the stated bound the ungranted rung arms with.
+        assertEquals(600_000L, FALLBACK_WINDOW_MILLIS)
     }
 }

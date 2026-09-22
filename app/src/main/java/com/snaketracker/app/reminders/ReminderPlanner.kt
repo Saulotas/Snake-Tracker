@@ -19,6 +19,11 @@ data class ReminderCandidate(
 /**
  * The planner's output: the snakes due right now and the single next instant at
  * which the planner should run again (null when there are no candidates).
+ *
+ * Since the frozen-payload seam (issue #37), production reads only
+ * [nextAlarmAt] — the armed alarm's due set comes from [freezeDuePayload] —
+ * so [dueSnakeIds] is consumed by `ReminderPlannerTest` alone, where it pins
+ * the planner's due-now semantics directly.
  */
 data class ReminderPlan(
     val dueSnakeIds: Set<Long>,
@@ -61,8 +66,9 @@ object ReminderPlanner {
     }
 
     // Calendar date of the last feeding (in `zone`) plus the interval, normalized
-    // to DUE_HOUR local time.
-    private fun dueInstantFor(lastFeedingAt: Instant, intervalDays: Int, zone: ZoneId): Instant {
+    // to DUE_HOUR local time. Shared with the payload freeze, which selects the
+    // snakes due at the armed instant (issue #37).
+    internal fun dueInstantFor(lastFeedingAt: Instant, intervalDays: Int, zone: ZoneId): Instant {
         val feedingDate = lastFeedingAt.atZone(zone).toLocalDate()
         val dueDate = feedingDate.plusDays(intervalDays.toLong())
         return ZonedDateTime.of(dueDate, LocalTime.of(DUE_HOUR, 0), zone).toInstant()

@@ -51,26 +51,39 @@ internal fun armViaPermissionLadder(
 }
 
 /**
- * Arms exactly one alarm for the next feeding-due instant. Exact while idle
- * when the permission ladder allows it (degrading to the inexact fallback if
- * the permission is revoked between check and set), inexact while idle
- * (~15-minute tolerance) otherwise — the reminder still lands on the correct
- * day.
+ * The stated bound of the fallback window the ungranted rung arms with: the
+ * alarm fires between the due instant and due + this length, so a device
+ * without the exact-alarm grant still gets its reminder within 10 minutes of
+ * the due hour (issue #36 WB2).
+ */
+internal const val FALLBACK_WINDOW_MILLIS = 10L * 60L * 1000L
+
+/**
+ * Arms exactly one alarm for the next feeding-due instant, freezing the plan's
+ * due-now payload into the intent extras (issue #37 WB1) so the fire-time
+ * notification path needs no database read. Exact while idle when the
+ * permission ladder allows it (degrading to the bounded-window fallback if the
+ * permission is revoked between check and set), otherwise a window alarm
+ * bounded to [FALLBACK_WINDOW_MILLIS] — delivered inside the stated window
+ * rather than at the next opportunistic wakeup.
  */
 object ReminderScheduler {
-    private const val ALARM_REQUEST_CODE = 4001
+    // The one request code of the single alarm; also the lookup key the
+    // instrumented extras test reads the armed PendingIntent back with.
+    internal const val ALARM_REQUEST_CODE = 4001
 
-    fun reschedule(context: Context, at: Instant?) {
+    fun reschedule(context: Context, payload: FrozenDuePayload) {
+        val at = payload.nextAlarmAt
         if (at == null) {
             cancel(context)
         } else {
-            arm(context, at)
+            arm(context, at, encodeDuePayload(payload))
         }
     }
 
-    fun arm(context: Context, at: Instant) {
+    private fun arm(context: Context, at: Instant, extras: Map<String, String>) {
         val alarmManager = context.getSystemService(AlarmManager::class.java)
-        val operation = pendingIntent(context)
+        val operation = pendingIntent(context, extras)
         val triggerAtMillis = at.toEpochMilli()
 
         armViaPermissionLadder(
@@ -82,8 +95,11 @@ object ReminderScheduler {
                 )
             },
             setInexact = {
-                alarmManager.setAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP, triggerAtMillis, operation
+                alarmManager.setWindow(
+                    AlarmManager.RTC_WAKEUP,
+                    triggerAtMillis,
+                    FALLBACK_WINDOW_MILLIS,
+                    operation
                 )
             }
         )
@@ -91,12 +107,15 @@ object ReminderScheduler {
 
     fun cancel(context: Context) {
         val alarmManager = context.getSystemService(AlarmManager::class.java)
-        alarmManager.cancel(pendingIntent(context))
+        alarmManager.cancel(pendingIntent(context, emptyMap()))
     }
 
-    private fun pendingIntent(context: Context): PendingIntent {
+    private fun pendingIntent(context: Context, extras: Map<String, String>): PendingIntent {
         val intent = Intent(context, AlarmReceiver::class.java)
             .setAction(AlarmReceiver.ACTION_FEEDING_DUE)
+        // The frozen due-now payload travels in the extras themselves, so the
+        // fire-time receiver decodes a plain string map (issue #37 WB1).
+        extras.forEach { (key, value) -> intent.putExtra(key, value) }
         return PendingIntent.getBroadcast(
             context,
             ALARM_REQUEST_CODE,

@@ -50,5 +50,16 @@
             </intent-filter>
         </receiver>
 
+        <!-- Re-arms the alarm after a manual clock edit or a timezone/DST
+             change, so the next reminder lands at 09:00 in the new zone. -->
+        <receiver
+            android:name=".reminders.ClockChangeReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.TIME_SET" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+            </intent-filter>
+        </receiver>
+
     </application>
 </manifest>

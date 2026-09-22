@@ -42,6 +42,17 @@ android {
     }
 
     testOptions {
+        // Gradle-managed device: each connectedDebugAndroidTest run provisions its
+        // own emulator, isolated from any device another agent has attached.
+        managedDevices {
+            localDevices {
+                create("pixel6Api33") {
+                    device = "Pixel 6"
+                    apiLevel = 33
+                    systemImageSource = "aosp-atd"
+                }
+            }
+        }
         unitTests {
             // Accepted module-wide exception (PR #34 review 🟡): the stub
             // android.jar returns 0/null instead of throwing "not mocked".

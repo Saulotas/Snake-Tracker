@@ -1,0 +1,8 @@
+<journey name="Feeding reminder heads-up">
+  <description>Feeding reminder delivery end-to-end (issue #38): open the app with one reminder-enabled snake, force its feeding plan to be due, and verify a heads-up notification naming the snake appears without opening the shade; tapping it returns to the app.</description>
+  <actions>
+    <action>Launch Snake Tracker fresh with exactly one snake that has reminders enabled (a never-fed snake is due immediately); verify the Calendar tab is shown and the reminder observer has armed the feeding-due plan for the snake.</action>
+    <action>Verify a heads-up banner notification appears over the UI without opening the notification shade, titled with the snake's name (copy: "Feeding due: &lt;name&gt;").</action>
+    <action>Tap the heads-up notification; verify the app is brought to the foreground (Snake Tracker launch screen visible) and the notification is cleared by the tap.</action>
+  </actions>
+</journey>

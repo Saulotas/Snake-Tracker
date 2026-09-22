@@ -12,6 +12,7 @@ import com.snaketracker.app.data.backup.BackupRepository
 import com.snaketracker.app.reminders.NotificationHelper
 import com.snaketracker.app.reminders.ReminderArming
 import com.snaketracker.app.reminders.ReminderScheduler
+import com.snaketracker.app.reminders.launchArmingPass
 import com.snaketracker.app.reminders.nextAlarmAtFlow
 import com.snaketracker.app.reminders.restartOnFailure
 import com.snaketracker.app.ui.viewmodel.BackupCoordinator
@@ -69,24 +70,36 @@ class SnakeTrackerApp : Application() {
         observeReminders()
     }
 
-    // Arms the single next-due feeding alarm on app start, then re-arms only
-    // when a snake/feeding data change moves the computed instant (or cancels
-    // when there is nothing left to remind about). A failure under the Room
-    // flows is logged and the collection restarts, so the alarm keeps
+    // Arms the single next-due feeding alarm on app start through the full
+    // launch pass: the first collection notifies every snake already due at
+    // launch and arms the following instant (issue #40 WB1), then the observer
+    // keeps following the next-instant stream, re-arming only when a snake/
+    // feeding data change moves the computed payload (or cancelling when there
+    // is nothing left to remind about) — duplicate payloads are suppressed
+    // upstream, so nothing stacks (issue #40 WB2/WB3). A failure under the
+    // Room flows is logged and the collection restarts, so the alarm keeps
     // following data changes for the lifetime of the process.
     private fun observeReminders() {
         appScope.launch {
             restartOnFailure(onError = { e ->
                 Log.e(LOG_TAG, "Reminder observation failed; restarting", e)
             }) {
-                nextAlarmAtFlow(
-                    snakes = repository.getAllSnakes(),
-                    lastFeedings = repository.getLastFeedingPerSnake(),
-                    now = { Instant.now() },
-                    zone = ZoneId.systemDefault()
-                ).collect { next ->
-                    ReminderScheduler.reschedule(this@SnakeTrackerApp, next)
-                }
+                launchArmingPass(
+                    payloadFlow = nextAlarmAtFlow(
+                        snakes = repository.getAllSnakes(),
+                        lastFeedings = repository.getLastFeedingPerSnake(),
+                        now = { Instant.now() },
+                        zone = ZoneId.systemDefault()
+                    ),
+                    notify = { snake ->
+                        NotificationHelper.showFeedingDueNotification(
+                            this@SnakeTrackerApp, snake.snakeId, snake.name
+                        )
+                    },
+                    reschedule = { frozen ->
+                        ReminderScheduler.reschedule(this@SnakeTrackerApp, frozen)
+                    }
+                )
             }
         }
     }
