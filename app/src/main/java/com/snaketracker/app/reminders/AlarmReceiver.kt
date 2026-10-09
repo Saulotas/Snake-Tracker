@@ -4,6 +4,9 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import com.snaketracker.app.logging.FileLogger
+import java.time.Duration
+import java.time.Instant
 
 /**
  * Fired by the single armed alarm: the plan's due-now set was frozen into this
@@ -20,15 +23,21 @@ class AlarmReceiver : BroadcastReceiver() {
         if (intent.action != ACTION_FEEDING_DUE) return
 
         val payload = decodeDuePayload(intent.extras.toFlatStringMap())
+        val now = Instant.now()
+        val lateness = payload.nextAlarmAt?.let { Duration.between(it, now).seconds }
+        FileLogger.i(
+            "AlarmReceiver",
+            "FIRED now=$now scheduledFor=${payload.nextAlarmAt} latenessSec=$lateness ${payload.describe()}"
+        )
         launchGoAsync(context) { appContext ->
             notifyFrozenPayloadAndReschedule(
                 payload = payload,
                 notify = { snake ->
                     NotificationHelper.showFeedingDueNotification(
-                        appContext, snake.snakeId, snake.name
+                        appContext, snake.snakeId, snake.name, source = "AlarmReceiver"
                     )
                 },
-                reschedule = { ReminderArming.reschedule(appContext) }
+                reschedule = { ReminderArming.reschedule(appContext, source = "AlarmReceiver") }
             )
         }
     }

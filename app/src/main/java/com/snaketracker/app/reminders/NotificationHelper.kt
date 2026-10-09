@@ -13,6 +13,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.snaketracker.app.MainActivity
 import com.snaketracker.app.R
+import com.snaketracker.app.logging.FileLogger
 
 object NotificationHelper {
     // The HIGH-importance channel id (issue #38). The platform merges only a
@@ -49,13 +50,19 @@ object NotificationHelper {
         }
     }
 
-    fun showFeedingDueNotification(context: Context, snakeId: Long, snakeName: String) {
+    fun showFeedingDueNotification(
+        context: Context,
+        snakeId: Long,
+        snakeName: String,
+        source: String = "unknown"
+    ) {
         // POST_NOTIFICATIONS is a runtime permission on Android 13+; skip posting if the
         // user has not granted it, matching the app's "no notification when denied" intent.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
                 != PackageManager.PERMISSION_GRANTED
         ) {
+            FileLogger.w(LOG_TAG, "SKIPPED (POST_NOTIFICATIONS not granted) snake=$snakeId:$snakeName source=$source")
             return
         }
 
@@ -82,5 +89,8 @@ object NotificationHelper {
         // Each snake gets its own notification id so multiple reminders can stack;
         // re-posting the same id replaces that id's notification (notify-by-id rule).
         NotificationManagerCompat.from(context).notify(snakeId.toInt(), notification)
+        FileLogger.i(LOG_TAG, "POSTED notification id=${snakeId.toInt()} snake=$snakeName source=$source")
     }
+
+    private const val LOG_TAG = "Notify"
 }

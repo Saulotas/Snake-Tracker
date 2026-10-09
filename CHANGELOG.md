@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Debug log. The app now keeps a small text log on the device (private to the app, capped at about 1 MB) recording every reminder event: when each alarm is armed, when it fires and how late, every notification posted along with what triggered it (alarm, app launch, reboot, clock change, permission change, backup import), and any crash. A new "Export debug log" row in Settings saves it to a file you choose, so unexpected notifications can be traced.
 - JSON backup and restore. A new Settings tab with a gear icon joins Calendar, Snakes and Food Stock in the bottom navigation bar, offering two actions. "Export backup" saves everything the app knows — your snakes, feedings, sheds, weights, and food stock — as one portable JSON backup file, in a location you choose (the app suggests a name carrying today's date). "Import backup" restores everything from such a file: the app first warns, plainly, that importing replaces all your current data, then restores in one step and lists exactly what came back — or explains exactly why an untrusted file (unreadable, made by a newer version, incomplete, or far too large to be a backup) was rejected whole, leaving your data untouched. After a successful import, your feeding reminders are immediately brought up to date with the restored data.
 
 ### Changed

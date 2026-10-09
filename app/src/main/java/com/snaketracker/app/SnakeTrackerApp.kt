@@ -9,7 +9,9 @@ import com.snaketracker.app.data.backup.BackupExportGateway
 import com.snaketracker.app.data.backup.BackupImportContentGateway
 import com.snaketracker.app.data.backup.BackupImportGateway
 import com.snaketracker.app.data.backup.BackupRepository
+import com.snaketracker.app.logging.FileLogger
 import com.snaketracker.app.reminders.NotificationHelper
+import com.snaketracker.app.reminders.describe
 import com.snaketracker.app.reminders.ReminderArming
 import com.snaketracker.app.reminders.ReminderScheduler
 import com.snaketracker.app.reminders.launchArmingPass
@@ -21,6 +23,7 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
@@ -49,7 +52,7 @@ class SnakeTrackerApp : Application() {
             backupEngine = backupRepository,
             exportGateway = backupExportGateway,
             importGateway = backupImportGateway,
-            rearmReminders = { ReminderArming.reschedule(this) }
+            rearmReminders = { ReminderArming.reschedule(this, source = "BackupImport") }
         )
     }
     val viewModelFactory: ViewModelFactory by lazy {
@@ -61,11 +64,13 @@ class SnakeTrackerApp : Application() {
     private val appScope = CoroutineScope(
         SupervisorJob() + Dispatchers.Default + CoroutineExceptionHandler { _, e ->
             Log.e(LOG_TAG, "Unhandled failure on the app scope", e)
+            FileLogger.e(LOG_TAG, "Unhandled failure on the app scope", e)
         }
     )
 
     override fun onCreate() {
         super.onCreate()
+        FileLogger.init(this)
         NotificationHelper.createChannel(this)
         observeReminders()
     }
@@ -83,6 +88,7 @@ class SnakeTrackerApp : Application() {
         appScope.launch {
             restartOnFailure(onError = { e ->
                 Log.e(LOG_TAG, "Reminder observation failed; restarting", e)
+                FileLogger.e(LOG_TAG, "Reminder observation failed; restarting", e)
             }) {
                 launchArmingPass(
                     payloadFlow = nextAlarmAtFlow(
@@ -90,10 +96,13 @@ class SnakeTrackerApp : Application() {
                         lastFeedings = repository.getLastFeedingPerSnake(),
                         now = { Instant.now() },
                         zone = ZoneId.systemDefault()
-                    ),
+                    ).onEach { frozen ->
+                        // One line per distinct payload: a cold start, or a data change.
+                        FileLogger.i(LOG_TAG, "launch pass payload ${frozen.describe()}")
+                    },
                     notify = { snake ->
                         NotificationHelper.showFeedingDueNotification(
-                            this@SnakeTrackerApp, snake.snakeId, snake.name
+                            this@SnakeTrackerApp, snake.snakeId, snake.name, source = "LaunchPass"
                         )
                     },
                     reschedule = { frozen ->

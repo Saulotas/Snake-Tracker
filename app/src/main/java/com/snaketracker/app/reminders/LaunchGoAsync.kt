@@ -3,6 +3,7 @@ package com.snaketracker.app.reminders
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.util.Log
+import com.snaketracker.app.logging.FileLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -24,6 +25,7 @@ internal fun BroadcastReceiver.launchGoAsync(
             block(context.applicationContext)
         } catch (e: Exception) {
             Log.e(tag, "Receiver work failed", e)
+            FileLogger.e(tag, "Receiver work failed", e)
         } finally {
             pendingResult.finish()
         }

@@ -3,6 +3,7 @@ package com.snaketracker.app.reminders
 import android.content.Context
 import com.snaketracker.app.data.AppDatabase
 import com.snaketracker.app.data.Repository
+import com.snaketracker.app.logging.FileLogger
 import java.time.Instant
 import java.time.ZoneId
 
@@ -40,14 +41,15 @@ internal suspend fun notifyFrozenPayloadAndReschedule(
  * snakes due at its very instant.
  */
 object ReminderArming {
-    suspend fun refresh(context: Context) {
+    suspend fun refresh(context: Context, source: String = "unknown") {
         val appContext = context.applicationContext
         val frozen = snapshotAndFreeze(appContext)
+        FileLogger.i(LOG_TAG, "refresh(source=$source) ${frozen.describe()}")
         notifyFrozenPayloadAndReschedule(
             payload = frozen,
             notify = { snake ->
                 NotificationHelper.showFeedingDueNotification(
-                    appContext, snake.snakeId, snake.name
+                    appContext, snake.snakeId, snake.name, source = source
                 )
             },
             reschedule = { ReminderScheduler.reschedule(appContext, frozen) }
@@ -60,10 +62,14 @@ object ReminderArming {
      * [ReminderScheduler.reschedule] - no [refresh] notify pass by
      * construction (issue #28 WB5).
      */
-    suspend fun reschedule(context: Context) {
+    suspend fun reschedule(context: Context, source: String = "unknown") {
         val appContext = context.applicationContext
-        ReminderScheduler.reschedule(appContext, snapshotAndFreeze(appContext))
+        val frozen = snapshotAndFreeze(appContext)
+        FileLogger.i(LOG_TAG, "reschedule(source=$source) ${frozen.describe()}")
+        ReminderScheduler.reschedule(appContext, frozen)
     }
+
+    private const val LOG_TAG = "Arming"
 
     /**
      * The one snapshot→plan→freeze setup both entries consume: the shared

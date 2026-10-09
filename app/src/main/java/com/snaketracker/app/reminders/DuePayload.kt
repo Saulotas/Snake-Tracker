@@ -74,6 +74,9 @@ internal fun encodeDuePayload(payload: FrozenDuePayload): Map<String, String> {
  * next instant — so the receiver can still re-arm from a fresh plan
  * (issue #37 WB4).
  */
+internal fun FrozenDuePayload.describe(): String =
+    "due=[" + dueSnakes.joinToString { "${it.snakeId}:${it.name}" } + "] next=$nextAlarmAt"
+
 internal fun decodeDuePayload(extras: Map<String, String?>): FrozenDuePayload {
     val count = extras[DUE_SNAKE_COUNT_KEY]?.toIntOrNull() ?: 0
     val dueSnakes = buildList {

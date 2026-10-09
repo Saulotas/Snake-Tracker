@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import com.snaketracker.app.logging.FileLogger
 import java.time.Instant
 
 /**
@@ -45,6 +46,7 @@ internal fun armViaPermissionLadder(
         } catch (_: SecurityException) {
             // Permission revoked between the check above and this call —
             // degrade to the inexact fallback instead of crashing.
+            FileLogger.w("Scheduler", "exact alarm refused (SecurityException); using window fallback")
         }
     }
     setInexact()
@@ -75,6 +77,7 @@ object ReminderScheduler {
     fun reschedule(context: Context, payload: FrozenDuePayload) {
         val at = payload.nextAlarmAt
         if (at == null) {
+            FileLogger.i("Scheduler", "no next alarm -> cancelling")
             cancel(context)
         } else {
             arm(context, at, encodeDuePayload(payload))
@@ -85,10 +88,15 @@ object ReminderScheduler {
         val alarmManager = context.getSystemService(AlarmManager::class.java)
         val operation = pendingIntent(context, extras)
         val triggerAtMillis = at.toEpochMilli()
+        val exactHeld = exactPermissionHeld(context)
+        FileLogger.i(
+            "Scheduler",
+            "ARM at=$at exactPermissionHeld=$exactHeld dueNowCount=${extras[DUE_SNAKE_COUNT_KEY]}"
+        )
 
         armViaPermissionLadder(
             sdkInt = Build.VERSION.SDK_INT,
-            exactPermissionHeld = exactPermissionHeld(context),
+            exactPermissionHeld = exactHeld,
             setExact = {
                 alarmManager.setExactAndAllowWhileIdle(
                     AlarmManager.RTC_WAKEUP, triggerAtMillis, operation

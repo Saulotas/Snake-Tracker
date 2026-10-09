@@ -1,6 +1,7 @@
 package com.snaketracker.app.ui.screens
 
 import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -8,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Upload
 import androidx.compose.material3.AlertDialog
@@ -23,12 +25,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.snaketracker.app.R
 import com.snaketracker.app.data.backup.BackupTable
+import com.snaketracker.app.logging.FileLogger
 import com.snaketracker.app.ui.model.BackupExportState
 import com.snaketracker.app.ui.model.BackupImportState
 import com.snaketracker.app.ui.model.backupExportMessageFor
@@ -57,7 +61,8 @@ fun SettingsScreen(
     backupDestinationPicker: BackupDestinationPicker =
         rememberCreateDocumentPicker { uri -> if (uri != null) viewModel.exportBackup(uri) },
     backupSourcePicker: BackupSourcePicker =
-        rememberOpenDocumentPicker { uri -> if (uri != null) viewModel.requestBackupImport(uri) }
+        rememberOpenDocumentPicker { uri -> if (uri != null) viewModel.requestBackupImport(uri) },
+    debugLogDestinationPicker: BackupDestinationPicker = rememberDebugLogExportPicker()
 ) {
     val exportState by viewModel.backupExportState.collectAsStateWithLifecycle()
     val pendingImportUri by viewModel.pendingImportUri.collectAsStateWithLifecycle()
@@ -108,6 +113,21 @@ fun SettingsScreen(
                 modifier = Modifier
                     .testTag("import_backup_row")
                     .clickable { backupSourcePicker.pick() }
+            )
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.settings_export_debug_log)) },
+                supportingContent = {
+                    Text(stringResource(R.string.settings_export_debug_log_summary))
+                },
+                leadingContent = {
+                    Icon(
+                        imageVector = Icons.Default.BugReport,
+                        contentDescription = null
+                    )
+                },
+                modifier = Modifier
+                    .testTag("export_debug_log_row")
+                    .clickable { debugLogDestinationPicker.launch("snake-tracker-debug-log-${LocalDate.now()}.txt") }
             )
         }
     }
@@ -304,13 +324,34 @@ fun interface BackupDestinationPicker {
  */
 @Composable
 private fun rememberCreateDocumentPicker(
+    mimeType: String = JSON_MIME_TYPE,
     onDocumentPicked: (Uri?) -> Unit
 ): BackupDestinationPicker {
     val launcher = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument(JSON_MIME_TYPE)
+        ActivityResultContracts.CreateDocument(mimeType)
     ) { uri -> onDocumentPicked(uri) }
     return remember(launcher) {
         BackupDestinationPicker { name -> launcher.launch(name) }
+    }
+}
+
+/**
+ * Production picker for the debug log: a plain-text create-document picker
+ * whose chosen URI receives the on-device log written by [FileLogger].
+ */
+@Composable
+private fun rememberDebugLogExportPicker(): BackupDestinationPicker {
+    val context = LocalContext.current
+    return rememberCreateDocumentPicker(mimeType = "text/plain") { uri ->
+        if (uri != null) {
+            FileLogger.exportTo(context, uri) { ok ->
+                Toast.makeText(
+                    context,
+                    if (ok) R.string.debug_log_export_success else R.string.debug_log_export_failure,
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        }
     }
 }
 

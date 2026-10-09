@@ -3,6 +3,7 @@ package com.snaketracker.app.reminders
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import com.snaketracker.app.logging.FileLogger
 
 /**
  * The pure action guard: the two clock broadcasts — a manual time edit and a
@@ -28,7 +29,8 @@ internal fun handleClockChangeIntent(action: String?, refresh: () -> Unit) {
 class ClockChangeReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         handleClockChangeIntent(intent.action) {
-            launchGoAsync(context) { ReminderArming.refresh(it) }
+            FileLogger.i("ClockChangeReceiver", "clock/zone change received: ${intent.action}")
+            launchGoAsync(context) { ReminderArming.refresh(it, source = "ClockChangeReceiver") }
         }
     }
 }

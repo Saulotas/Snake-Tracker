@@ -54,6 +54,12 @@
     <string name="backup_import_failure_too_large">This file is far too large to be a Snake Tracker backup. Choose a JSON backup file.</string>
     <string name="backup_import_failure_database">The import failed while writing to the database. Your existing data was left untouched.</string>
 
+    <!-- Debug log export (Settings -> SAF picker -> toast). -->
+    <string name="settings_export_debug_log">Export debug log</string>
+    <string name="settings_export_debug_log_summary">Save the on-device reminder/notification log as a text file</string>
+    <string name="debug_log_export_success">Debug log saved</string>
+    <string name="debug_log_export_failure">Could not save the debug log</string>
+
     <plurals name="import_count_snakes">
         <item quantity="one">%1$d snake</item>
         <item quantity="other">%1$d snakes</item>
