@@ -43,15 +43,18 @@ internal suspend fun notifyFrozenPayloadAndReschedule(
 object ReminderArming {
     suspend fun refresh(context: Context, source: String = "unknown") {
         val appContext = context.applicationContext
-        val frozen = snapshotAndFreeze(appContext)
-        FileLogger.i(LOG_TAG, "refresh(source=$source) ${frozen.describe()}")
+        val snapshot = snapshotAndFreeze(appContext)
+        val frozen = snapshot.payload
+        val day = ReminderPlanner.occurrenceDayFor(Instant.now(), ZoneId.systemDefault())
+        FileLogger.i(
+            LOG_TAG,
+            "refresh(source=$source) ${frozen.describe()} dueNow=${snapshot.dueNowIds}"
+        )
+        // Only snakes due now are posted; the armed payload may list snakes
+        // that only become due at the next alarm instant.
         notifyFrozenPayloadAndReschedule(
-            payload = frozen,
-            notify = { snake ->
-                NotificationHelper.showFeedingDueNotification(
-                    appContext, snake.snakeId, snake.name, source = source
-                )
-            },
+            payload = frozen.copy(dueSnakes = snapshot.dueNowSnakes),
+            notify = { snake -> DueNotifier.notifyOnce(appContext, snake, day, source) },
             reschedule = { ReminderScheduler.reschedule(appContext, frozen) }
         )
     }
@@ -64,7 +67,7 @@ object ReminderArming {
      */
     suspend fun reschedule(context: Context, source: String = "unknown") {
         val appContext = context.applicationContext
-        val frozen = snapshotAndFreeze(appContext)
+        val frozen = snapshotAndFreeze(appContext).payload
         FileLogger.i(LOG_TAG, "reschedule(source=$source) ${frozen.describe()}")
         ReminderScheduler.reschedule(appContext, frozen)
     }
@@ -78,7 +81,7 @@ object ReminderArming {
      * clock/zone/snapshot change is a single edit (PR #34 review 🟡); only the
      * notify-vs-reschedule difference stays at the entries.
      */
-    private suspend fun snapshotAndFreeze(appContext: Context): FrozenDuePayload {
+    private suspend fun snapshotAndFreeze(appContext: Context): ArmingSnapshot {
         val zone = ZoneId.systemDefault()
         val candidates = Repository.getInstance(AppDatabase.getInstance(appContext))
             .getReminderSnapshot()
@@ -87,6 +90,9 @@ object ReminderArming {
             now = Instant.now(),
             zone = zone
         )
-        return freezeDuePayload(plan = plan, candidates = candidates, zone = zone)
+        return ArmingSnapshot(
+            payload = freezeDuePayload(plan = plan, candidates = candidates, zone = zone),
+            dueNowIds = plan.dueSnakeIds
+        )
     }
 }

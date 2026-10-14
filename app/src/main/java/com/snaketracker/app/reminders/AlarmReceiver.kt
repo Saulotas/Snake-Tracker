@@ -7,6 +7,7 @@ import android.os.Bundle
 import com.snaketracker.app.logging.FileLogger
 import java.time.Duration
 import java.time.Instant
+import java.time.ZoneId
 
 /**
  * Fired by the single armed alarm: the plan's due-now set was frozen into this
@@ -33,9 +34,12 @@ class AlarmReceiver : BroadcastReceiver() {
             notifyFrozenPayloadAndReschedule(
                 payload = payload,
                 notify = { snake ->
-                    NotificationHelper.showFeedingDueNotification(
-                        appContext, snake.snakeId, snake.name, source = "AlarmReceiver"
+                    // Keyed to the instant the alarm was armed for, so a slightly
+                    // early or late delivery still lands on the right reminder day.
+                    val day = ReminderPlanner.occurrenceDayFor(
+                        payload.nextAlarmAt ?: now, ZoneId.systemDefault()
                     )
+                    DueNotifier.notifyOnce(appContext, snake, day, "AlarmReceiver")
                 },
                 reschedule = { ReminderArming.reschedule(appContext, source = "AlarmReceiver") }
             )

@@ -10,12 +10,14 @@ import com.snaketracker.app.data.backup.BackupImportContentGateway
 import com.snaketracker.app.data.backup.BackupImportGateway
 import com.snaketracker.app.data.backup.BackupRepository
 import com.snaketracker.app.logging.FileLogger
+import com.snaketracker.app.reminders.DueNotifier
 import com.snaketracker.app.reminders.NotificationHelper
+import com.snaketracker.app.reminders.ReminderPlanner
 import com.snaketracker.app.reminders.describe
 import com.snaketracker.app.reminders.ReminderArming
 import com.snaketracker.app.reminders.ReminderScheduler
 import com.snaketracker.app.reminders.launchArmingPass
-import com.snaketracker.app.reminders.nextAlarmAtFlow
+import com.snaketracker.app.reminders.armingSnapshotFlow
 import com.snaketracker.app.reminders.restartOnFailure
 import com.snaketracker.app.ui.viewmodel.BackupCoordinator
 import com.snaketracker.app.ui.viewmodel.ViewModelFactory
@@ -91,19 +93,23 @@ class SnakeTrackerApp : Application() {
                 FileLogger.e(LOG_TAG, "Reminder observation failed; restarting", e)
             }) {
                 launchArmingPass(
-                    payloadFlow = nextAlarmAtFlow(
+                    snapshots = armingSnapshotFlow(
                         snakes = repository.getAllSnakes(),
                         lastFeedings = repository.getLastFeedingPerSnake(),
                         now = { Instant.now() },
                         zone = ZoneId.systemDefault()
-                    ).onEach { frozen ->
-                        // One line per distinct payload: a cold start, or a data change.
-                        FileLogger.i(LOG_TAG, "launch pass payload ${frozen.describe()}")
+                    ).onEach { snapshot ->
+                        // One line per distinct snapshot: a cold start, or a data change.
+                        FileLogger.i(
+                            LOG_TAG,
+                            "launch pass payload ${snapshot.payload.describe()} dueNow=${snapshot.dueNowIds}"
+                        )
                     },
                     notify = { snake ->
-                        NotificationHelper.showFeedingDueNotification(
-                            this@SnakeTrackerApp, snake.snakeId, snake.name, source = "LaunchPass"
+                        val day = ReminderPlanner.occurrenceDayFor(
+                            Instant.now(), ZoneId.systemDefault()
                         )
+                        DueNotifier.notifyOnce(this@SnakeTrackerApp, snake, day, "LaunchPass")
                     },
                     reschedule = { frozen ->
                         ReminderScheduler.reschedule(this@SnakeTrackerApp, frozen)

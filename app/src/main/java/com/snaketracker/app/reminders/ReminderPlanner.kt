@@ -1,6 +1,7 @@
 package com.snaketracker.app.reminders
 
 import java.time.Instant
+import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
@@ -72,6 +73,21 @@ object ReminderPlanner {
         val feedingDate = lastFeedingAt.atZone(zone).toLocalDate()
         val dueDate = feedingDate.plusDays(intervalDays.toLong())
         return ZonedDateTime.of(dueDate, LocalTime.of(DUE_HOUR, 0), zone).toInstant()
+    }
+
+    /**
+     * The reminder occurrence an instant belongs to: the local date of the most
+     * recent 09:00 at or before [at]. A snake is notified at most once per
+     * occurrence, so a reboot, app launch or clock change in the middle of a
+     * reminder day does not re-post what that day's alarm already posted.
+     */
+    internal fun occurrenceDayFor(at: Instant, zone: ZoneId): LocalDate {
+        val local = at.atZone(zone)
+        return if (local.toLocalTime() < LocalTime.of(DUE_HOUR, 0)) {
+            local.toLocalDate().minusDays(1)
+        } else {
+            local.toLocalDate()
+        }
     }
 
     // The next DUE_HOUR local time strictly after `now` — today's if it has not

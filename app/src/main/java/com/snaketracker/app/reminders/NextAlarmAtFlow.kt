@@ -6,6 +6,7 @@ import com.snaketracker.app.data.entities.Snake
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import java.time.Instant
 import java.time.ZoneId
 
@@ -22,12 +23,38 @@ internal fun nextAlarmAtFlow(
     now: () -> Instant,
     zone: ZoneId
 ): Flow<FrozenDuePayload> =
+    armingSnapshotFlow(snakes, lastFeedings, now, zone)
+        .map { it.payload }
+        .distinctUntilChanged()
+
+/**
+ * One planning result: the [payload] that gets armed into the alarm (it lists
+ * the snakes due at the armed instant, which may be days away) plus
+ * [dueNowIds], the snakes that are due at planning time. Only the latter may
+ * be notified immediately; notifying the whole payload on launch, boot or a
+ * data change posted "feeding due" for snakes that were not due yet.
+ */
+internal data class ArmingSnapshot(
+    val payload: FrozenDuePayload,
+    val dueNowIds: Set<Long>
+) {
+    /** The payload's snakes that are really due right now, in payload order. */
+    val dueNowSnakes: List<FrozenDueSnake>
+        get() = payload.dueSnakes.filter { it.snakeId in dueNowIds }
+}
+
+internal fun armingSnapshotFlow(
+    snakes: Flow<List<Snake>>,
+    lastFeedings: Flow<List<LastFeedingInfo>>,
+    now: () -> Instant,
+    zone: ZoneId
+): Flow<ArmingSnapshot> =
     combine(snakes, lastFeedings) { snakeList, feedingList ->
         val candidates = buildReminderCandidates(snakeList.filter { it.remindersEnabled }, feedingList)
-        freezeDuePayload(
-            plan = ReminderPlanner.plan(candidates = candidates, now = now(), zone = zone),
-            candidates = candidates,
-            zone = zone
+        val plan = ReminderPlanner.plan(candidates = candidates, now = now(), zone = zone)
+        ArmingSnapshot(
+            payload = freezeDuePayload(plan = plan, candidates = candidates, zone = zone),
+            dueNowIds = plan.dueSnakeIds
         )
     }.distinctUntilChanged()
 
@@ -42,15 +69,16 @@ internal fun nextAlarmAtFlow(
  * by [ReminderArming.reschedule] (issue #28 WB5).
  */
 internal suspend fun launchArmingPass(
-    payloadFlow: Flow<FrozenDuePayload>,
+    snapshots: Flow<ArmingSnapshot>,
     notify: (FrozenDueSnake) -> Unit,
     reschedule: suspend (FrozenDuePayload) -> Unit
 ) {
-    payloadFlow.collect { frozen ->
+    snapshots.collect { snapshot ->
+        // Notify only what is due now; the alarm still arms the full payload.
         notifyFrozenPayloadAndReschedule(
-            payload = frozen,
+            payload = snapshot.payload.copy(dueSnakes = snapshot.dueNowSnakes),
             notify = notify,
-            reschedule = { reschedule(frozen) }
+            reschedule = { reschedule(snapshot.payload) }
         )
     }
 }

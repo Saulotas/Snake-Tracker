@@ -52,7 +52,7 @@ class ColdStartArmingTest {
         val calls = mutableListOf<String>()
 
         launchArmingPass(
-            payloadFlow = nextAlarmAtFlow(
+            snapshots = armingSnapshotFlow(
                 snakes = flow { emit(snakes) },
                 lastFeedings = flow { emit(feedings) },
                 now = { now },
@@ -82,7 +82,7 @@ class ColdStartArmingTest {
         val calls = mutableListOf<String>()
 
         launchArmingPass(
-            payloadFlow = nextAlarmAtFlow(
+            snapshots = armingSnapshotFlow(
                 snakes = flow { emit(listOf(snake)) },
                 lastFeedings = flow { emit(latestOnly); emit(latestPlusOlder) },
                 now = { now },
@@ -92,9 +92,9 @@ class ColdStartArmingTest {
             reschedule = { payload -> calls.add("arm:${payload.nextAlarmAt}") }
         )
 
-        // One pass total: the duplicate payload never re-notifies and never
-        // re-arms, so the shade and the alarm stay single-valued.
-        assertEquals(listOf("notify:1", "arm:2026-09-15T07:00:00Z"), calls)
+        // One pass total: the duplicate payload never re-arms. Noodle is only
+        // due at the armed instant (09-15), not now, so nothing is posted.
+        assertEquals(listOf("arm:2026-09-15T07:00:00Z"), calls)
     }
 
     /**
@@ -109,7 +109,7 @@ class ColdStartArmingTest {
         val calls = mutableListOf<String>()
 
         launchArmingPass(
-            payloadFlow = nextAlarmAtFlow(
+            snapshots = armingSnapshotFlow(
                 snakes = flow { emit(emptyList()) },
                 lastFeedings = flow { emit(emptyList()) },
                 now = { now },
@@ -125,8 +125,8 @@ class ColdStartArmingTest {
     /**
      * The surviving [launchArmingPass] seam with a snake due exactly at the
      * armed instant (Noodle, fed 09-12, interval 3): the frozen payload
-     * carries it, so the pass posts it once and moves the alarm to that
-     * instant. The notify-free reschedule-only shape is owned by
+     * carries it for the alarm, but it is not due *now*, so the pass posts
+     * nothing and only moves the alarm to that instant. The notify-free reschedule-only shape is owned by
      * [ReminderArming.reschedule], pinned in ReminderArmingTest (issue #28 WB5).
      */
     @Test
@@ -136,7 +136,7 @@ class ColdStartArmingTest {
         val calls = mutableListOf<String>()
 
         launchArmingPass(
-            payloadFlow = nextAlarmAtFlow(
+            snapshots = armingSnapshotFlow(
                 snakes = flow { emit(listOf(snake)) },
                 lastFeedings = flow { emit(feedings) },
                 now = { now },
@@ -146,6 +146,6 @@ class ColdStartArmingTest {
             reschedule = { payload -> calls.add("arm:${payload.nextAlarmAt}") }
         )
 
-        assertEquals(listOf("notify:1", "arm:2026-09-15T07:00:00Z"), calls)
+        assertEquals(listOf("arm:2026-09-15T07:00:00Z"), calls)
     }
 }
