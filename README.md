@@ -11,7 +11,7 @@ SQLite database (via Room) inside the app's own data folder.
 
 - **Multiple snakes**: name, species, morph, enclosure, notes, custom feeding interval.
 - **Feeding log**: date, food type/size, accepted or refused, assist-fed flag, notes.
-- **Shed log**: date, complete/incomplete, notes (stuck caps, retained eye caps, etc).
+- **Shed log**: date, complete/incomplete, notes (stuck caps, retained eye caps, etc.).
 - **Weight log**: date + grams, with notes, per snake.
 - **Food stock**: track inventory of frozen feeders with quantity and low-stock warning.
 - **Reminders**: the app arms a single exact Android alarm for the next feeding
